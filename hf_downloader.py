@@ -1,8 +1,48 @@
-import argparse
+import sys
+import subprocess
 import os
 import shutil
-from huggingface_hub import hf_hub_download
+import argparse
+import warnings
 
+# ============================================================================
+# 1. AUTO-INSTALL DEPENDENCIES
+# ============================================================================
+def install_package(package):
+    print(f"📦 Installing missing package: {package}...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        print(f"✅ {package} installed successfully.")
+    except subprocess.CalledProcessError:
+        print(f"❌ Failed to install {package}. Please install it manually.")
+        sys.exit(1)
+
+def ensure_dependencies():
+    """Memastikan paket yang diperlukan sudah terinstall sebelum import"""
+    required_packages = {
+        "huggingface_hub": "huggingface_hub",
+        "hf_transfer": "hf_transfer" # Penting untuk kecepatan download maksimal
+    }
+    
+    import importlib.util
+    for import_name, install_name in required_packages.items():
+        if importlib.util.find_spec(import_name) is None:
+            install_package(install_name)
+
+# Jalankan pengecekan dependency
+ensure_dependencies()
+
+# ============================================================================
+# IMPORTS SETELAH DEPENDENCY CHECK
+# ============================================================================
+try:
+    from huggingface_hub import hf_hub_download
+except ImportError:
+    # Fallback double check jika import gagal meski sudah diinstall
+    print("🔄 Reloading dependencies...")
+    from huggingface_hub import hf_hub_download
+
+# Aktifkan HF Transfer untuk kecepatan maksimal (Rust based)
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 # ============================================================================
@@ -26,8 +66,12 @@ PRESET_DIRS = {
 def download_url(url, output_dir):
     """Download file dari URL dengan hf_transfer"""
     
-    # Ekstrak filename dari URL
+    # Ekstrak filename dari URL (mengambil bagian terakhir)
     filename = url.split('/')[-1]
+    # Membersihkan query parameters jika ada (misal ?download=true)
+    if '?' in filename:
+        filename = filename.split('?')[0]
+        
     final_path = os.path.join(output_dir, filename)
     
     # Skip jika sudah ada
@@ -45,25 +89,47 @@ def download_url(url, output_dir):
     
     try:
         # Parse URL
-        parts = url.replace("https://huggingface.co/", "").split("/resolve/main/")
-        if len(parts) != 2:
-            raise ValueError("Invalid HuggingFace URL format")
+        # Support format: https://huggingface.co/Repo/ID/resolve/main/Path/To/File
+        if "huggingface.co" not in url:
+            raise ValueError("URL must be from huggingface.co")
+            
+        clean_url = url.replace("https://huggingface.co/", "")
         
-        repo_id = parts[0]
-        file_path = parts[1]
-        
-        # Download ke temp directory
+        # Logika split untuk mendapatkan Repo ID dan File Path
+        # Kita asumsikan format standar /resolve/{branch}/
+        if "/resolve/" in clean_url:
+            parts = clean_url.split("/resolve/")
+            repo_id = parts[0]
+            # Mengambil path setelah branch (misal 'main/')
+            remainder = parts[1].split("/", 1)
+            if len(remainder) < 2:
+                 raise ValueError("Cannot parse file path from URL")
+            file_path = remainder[1] # Path file di dalam repo
+        else:
+             # Fallback parsing kasar jika URL formatnya tidak standar resolve
+             parts = clean_url.split("/")
+             repo_id = "/".join(parts[:2])
+             file_path = "/".join(parts[2:]) # Ini mungkin tidak akurat untuk blob, tapi dicoba
+
+        # Download ke temp directory untuk menghindari file corrupt di folder utama
         temp_dir = os.path.join(output_dir, ".temp_download")
         os.makedirs(temp_dir, exist_ok=True)
         
+        print(f"   Repo: {repo_id}")
+        print(f"   File: {file_path}")
+        
+        # --- PERBAIKAN DI SINI ---
+        # local_dir_use_symlinks dihapus karena deprecated
         downloaded_path = hf_hub_download(
             repo_id=repo_id,
             filename=file_path,
             local_dir=temp_dir,
-            local_dir_use_symlinks=False
+            # local_dir_use_symlinks=False  <-- DIHAPUS
         )
         
         # Move ke lokasi final
+        # Kita harus memastikan direktori tujuan untuk file move tersedia
+        # (terutama jika file_path mengandung folder)
         shutil.move(downloaded_path, final_path)
         
         # Cleanup temp
@@ -75,6 +141,9 @@ def download_url(url, output_dir):
     except Exception as e:
         print(f"❌ Failed: {filename}")
         print(f"   Error: {e}\n")
+        # Bersihkan temp jika gagal
+        if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
         return False
 
 # ============================================================================
@@ -123,17 +192,6 @@ Examples:
   
   # Download multiple files inline
   python app.py --url "url1" --url "url2" --url "url3" --dir vae
-
-Preset Directories:
-  diffusion     → /root/workspace/ComfyUI/models/diffusion_models
-  vae           → /root/workspace/ComfyUI/models/vae
-  text_encoder  → /root/workspace/ComfyUI/models/text_encoders
-  lora          → /root/workspace/ComfyUI/models/loras
-  checkpoint    → /root/workspace/ComfyUI/models/checkpoints
-  clip          → /root/workspace/ComfyUI/models/clip
-  clip_vision   → /root/workspace/ComfyUI/models/clip_vision
-  unet          → /root/workspace/ComfyUI/models/unet
-  controlnet    → /root/workspace/ComfyUI/models/controlnet
         """
     )
     
