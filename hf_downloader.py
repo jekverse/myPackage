@@ -6,6 +6,7 @@ import time
 from tqdm import tqdm
 from huggingface_hub import hf_hub_download
 
+# Aktifkan HF Transfer (Download super cepat berbasis Rust)
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
 # ============================================================================
@@ -29,24 +30,22 @@ PRESET_DIRS = {
 def download_url(url, output_dir, token=None):
     """Download file dari URL dengan hf_transfer"""
     
-    # Ekstrak filename dari URL
-    # Handle URL format: https://huggingface.co/repo/id/resolve/main/folder/file.ext
+    # Ekstrak filename dan repo_id dari URL
     try:
         if "/resolve/" in url:
             parts = url.split("/resolve/")
             base_url = parts[0]
             repo_id = base_url.replace("https://huggingface.co/", "")
             
-            # parts[1] is "main/folder/file.ext" or "branch/folder/file.ext"
-            # We need to separate revision (branch) from filepath
+            # parts[1] bisa berupa "main/folder/file.ext" atau "branch/folder/file.ext"
             path_parts = parts[1].split("/", 1)
             revision = path_parts[0]
             file_path = path_parts[1]
-            filename = file_path.split("/")[-1] # Only keep the filename, flatten structure
+            filename = file_path.split("/")[-1] # Hanya ambil nama file
         else:
-             # Fallback for simple URLs or blob URLs if user makes mistake, though resolve is standard
+             # Fallback untuk URL sederhana
             filename = url.split('/')[-1]
-            repo_id = None # Cannot determine easily without standard format
+            repo_id = None 
             revision = None
             file_path = None
     except Exception:
@@ -55,7 +54,7 @@ def download_url(url, output_dir, token=None):
 
     final_path = os.path.join(output_dir, filename)
     
-    # Skip jika sudah ada
+    # Skip jika file sudah ada
     if os.path.exists(final_path):
         print(f"⏭️  Skipping: {filename} (already exists)")
         return True
@@ -79,8 +78,7 @@ def download_url(url, output_dir, token=None):
                 token=token 
             )
         else:
-            # Fallback parsing strategy if regex/split above failed or non-standard URL
-             # Re-parse strictly for main branch if simple logic applied
+            # Fallback parsing strategy jika regex di atas gagal
             parts = url.replace("https://huggingface.co/", "").split("/resolve/main/")
             if len(parts) != 2:
                  raise ValueError(f"Could not parse HF URL: {url}")
@@ -96,11 +94,6 @@ def download_url(url, output_dir, token=None):
 
         # Move ke lokasi final
         shutil.move(downloaded_path, final_path)
-        
-        # Cleanup temp (file specific, don't remove whole dir as other threads might use it)
-        # However, hf_hub_download with local_dir might structure things differently. 
-        # But since we move the file immediately, it should be fine.
-        # Ideally we clean up empty dirs in temp later.
         
         print(f"✅ Completed: {filename}")
         return True
@@ -214,9 +207,17 @@ Examples:
     
     args = parser.parse_args()
 
-    # Token Info
+    # =========================================================
+    # PERBAIKAN: SET ENVIRONMENT VARIABLE SECARA EKSPLISIT
+    # =========================================================
+    # Ini penting agar hf_transfer (Rust) mengenali tokennya
     if args.token:
-        masked_token = f"*******{args.token[-5:]}" if len(args.token) > 5 else "Set"
+        os.environ["HF_TOKEN"] = args.token
+
+    # Token Info
+    current_token = os.environ.get("HF_TOKEN")
+    if current_token:
+        masked_token = f"*******{current_token[-5:]}" if len(current_token) > 5 else "Set"
         print(f"🔑 HF Token: ✅ Detected ({masked_token})")
     else:
         print("⚪ HF Token: ❌ Not detected (Public models only)")
@@ -257,10 +258,10 @@ Examples:
     
     # Download
     if len(urls) == 1:
-        # Single file, just run directly
+        # Single file
         download_url(urls[0], output_dir, args.token)
     else:
-        # Multiple files, use batch with thread pool
+        # Batch
         download_batch(urls, output_dir, max_workers=args.jobs, token=args.token)
 
 if __name__ == "__main__":
