@@ -131,7 +131,7 @@ def download_batch(urls, output_dir, max_workers=4, token=None):
         # Map futures to URLs
         future_to_url = {executor.submit(download_url, url, output_dir, token): url for url in urls}
         
-        for future in tqdm(concurrent.futures.as_completed(future_to_url), total=len(urls), unit="file", desc="🚀 Total Progress", disable=False):
+        for future in tqdm(concurrent.futures.as_completed(future_to_url), total=len(urls), unit="file", desc="🚀 Total Progress"):
             url = future_to_url[future]
             try:
                 if future.result():
