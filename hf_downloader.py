@@ -4,7 +4,7 @@ import shutil
 import concurrent.futures
 import time
 from tqdm import tqdm
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, login
 
 # Aktifkan HF Transfer (Download super cepat berbasis Rust)
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
@@ -37,13 +37,11 @@ def download_url(url, output_dir, token=None):
             base_url = parts[0]
             repo_id = base_url.replace("https://huggingface.co/", "")
             
-            # parts[1] bisa berupa "main/folder/file.ext" atau "branch/folder/file.ext"
             path_parts = parts[1].split("/", 1)
             revision = path_parts[0]
             file_path = path_parts[1]
-            filename = file_path.split("/")[-1] # Hanya ambil nama file
+            filename = file_path.split("/")[-1]
         else:
-             # Fallback untuk URL sederhana
             filename = url.split('/')[-1]
             repo_id = None 
             revision = None
@@ -59,16 +57,16 @@ def download_url(url, output_dir, token=None):
         print(f"⏭️  Skipping: {filename} (already exists)")
         return True
     
-    # Buat direktori jika belum ada
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"📥 Downloading: {filename}")
     
     try:
-        # Download ke temp directory
         temp_dir = os.path.join(output_dir, ".temp_download")
         os.makedirs(temp_dir, exist_ok=True)
         
+        # Token di-handle oleh login() global, tapi kita pass juga ke fungsi
+        # sebagai redundancy.
         if repo_id and file_path:
              downloaded_path = hf_hub_download(
                 repo_id=repo_id,
@@ -78,7 +76,6 @@ def download_url(url, output_dir, token=None):
                 token=token 
             )
         else:
-            # Fallback parsing strategy jika regex di atas gagal
             parts = url.replace("https://huggingface.co/", "").split("/resolve/main/")
             if len(parts) != 2:
                  raise ValueError(f"Could not parse HF URL: {url}")
@@ -92,9 +89,7 @@ def download_url(url, output_dir, token=None):
                 token=token
             )
 
-        # Move ke lokasi final
         shutil.move(downloaded_path, final_path)
-        
         print(f"✅ Completed: {filename}")
         return True
         
@@ -107,7 +102,6 @@ def download_url(url, output_dir, token=None):
 # BATCH DOWNLOAD FUNCTION
 # ============================================================================
 def download_batch(urls, output_dir, max_workers=4, token=None):
-    """Download multiple URLs in parallel"""
     print(f"\n{'='*40}")
     print(f"🚀 BATCH DOWNLOAD: {len(urls)} files")
     print(f"{'='*40}")
@@ -121,7 +115,6 @@ def download_batch(urls, output_dir, max_workers=4, token=None):
     failed_count = 0
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Map futures to URLs
         future_to_url = {executor.submit(download_url, url, output_dir, token): url for url in urls}
         
         for future in tqdm(concurrent.futures.as_completed(future_to_url), total=len(urls), unit="file", desc="🚀 Total Progress"):
@@ -137,7 +130,6 @@ def download_batch(urls, output_dir, max_workers=4, token=None):
     
     elapsed = time.time() - start_time
     
-    # Cleanup temp dir root if exists
     temp_dir = os.path.join(output_dir, ".temp_download")
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -152,116 +144,65 @@ def download_batch(urls, output_dir, max_workers=4, token=None):
 # ============================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="🚀 Ultra-fast HuggingFace Model Downloader (hf_transfer + Parallel)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Download single file
-  python app.py --url "https://huggingface.co/..." --dir diffusion
-  
-  # Download multiple files parallel
-  python app.py --batch urls.txt --dir lora --jobs 8
-  
-  # Authenticated download
-  python app.py --url "..." --dir vae --token "hf_..."
-        """
+        description="🚀 Ultra-fast HuggingFace Model Downloader (hf_transfer + Parallel)"
     )
     
-    parser.add_argument(
-        '--url',
-        action='append',
-        help='HuggingFace model URL (can be used multiple times)'
-    )
-    
-    parser.add_argument(
-        '--batch',
-        type=str,
-        help='File containing URLs (one per line)'
-    )
-    
-    parser.add_argument(
-        '--dir',
-        required=True,
-        help='Output directory (preset name or custom path)'
-    )
-    
-    parser.add_argument(
-        '--list-presets',
-        action='store_true',
-        help='Show all preset directories'
-    )
-    
-    parser.add_argument(
-        '--jobs', '-j',
-        type=int,
-        default=4,
-        help='Number of parallel downloads (default: 4)'
-    )
-    
-    parser.add_argument(
-        '--token',
-        type=str,
-        default=os.environ.get("HF_TOKEN"),
-        help='HuggingFace Token (optional, defaults to HF_TOKEN env var)'
-    )
+    parser.add_argument('--url', action='append')
+    parser.add_argument('--batch', type=str)
+    parser.add_argument('--dir', required=True)
+    parser.add_argument('--list-presets', action='store_true')
+    parser.add_argument('--jobs', '-j', type=int, default=4)
+    parser.add_argument('--token', type=str, default=os.environ.get("HF_TOKEN"))
     
     args = parser.parse_args()
 
     # =========================================================
-    # PERBAIKAN: SET ENVIRONMENT VARIABLE SECARA EKSPLISIT
+    # AUTHENTICATION FIX
     # =========================================================
-    # Ini penting agar hf_transfer (Rust) mengenali tokennya
     if args.token:
-        os.environ["HF_TOKEN"] = args.token
-
-    # Token Info
-    current_token = os.environ.get("HF_TOKEN")
-    if current_token:
-        masked_token = f"*******{current_token[-5:]}" if len(current_token) > 5 else "Set"
-        print(f"🔑 HF Token: ✅ Detected ({masked_token})")
+        # Gunakan fungsi login resmi. Ini akan menulis token ke cache
+        # yang dibaca oleh modul hf_transfer (Rust)
+        try:
+            print(f"🔐 Authenticating with Hugging Face Hub...")
+            login(token=args.token, add_to_git_credential=False)
+            os.environ["HF_TOKEN"] = args.token # Set env var juga untuk double safety
+            
+            masked_token = f"*******{args.token[-5:]}" if len(args.token) > 5 else "Set"
+            print(f"✅ Auth Success ({masked_token})")
+        except Exception as e:
+            print(f"⚠️ Auth Warning: {e}")
     else:
         print("⚪ HF Token: ❌ Not detected (Public models only)")
     
-    # Show presets
     if args.list_presets:
         print("\n📁 Available Preset Directories:\n")
         for name, path in PRESET_DIRS.items():
             print(f"  {name:<15} → {path}")
-            print()
         return
     
-    # Determine output directory
     if args.dir in PRESET_DIRS:
         output_dir = PRESET_DIRS[args.dir]
     else:
         output_dir = args.dir
     
-    # Collect URLs
     urls = []
-    
     if args.url:
         urls.extend(args.url)
-    
     if args.batch:
         if not os.path.exists(args.batch):
             print(f"❌ Error: File not found: {args.batch}")
             return
-        
         with open(args.batch, 'r') as f:
             batch_urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
             urls.extend(batch_urls)
     
     if not urls:
-        print("❌ Error: No URLs provided. Use --url or --batch")
-        parser.print_help()
+        print("❌ Error: No URLs provided.")
         return
     
-    # Download
     if len(urls) == 1:
-        # Single file
         download_url(urls[0], output_dir, args.token)
     else:
-        # Batch
         download_batch(urls, output_dir, max_workers=args.jobs, token=args.token)
 
 if __name__ == "__main__":
