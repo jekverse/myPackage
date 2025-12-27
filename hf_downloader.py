@@ -154,16 +154,7 @@ def download_batch(tasks, max_workers=4, token=None):
     print(f"{'='*80}\n")
 
     
-    elapsed = time.time() - start_time
-    
-    temp_dir = os.path.join(output_dir, ".temp_download")
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
-    print(f"\n{'='*80}")
-    print(f"🎉 COMPLETE! in {elapsed:.2f}s")
-    print(f"✅ Success: {success_count} | ❌ Failed: {failed_count}")
-    print(f"{'='*80}\n")
 
 # ============================================================================
 # MAIN CLI
