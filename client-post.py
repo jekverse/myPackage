@@ -4,6 +4,7 @@ import sys
 import subprocess
 import re
 import os
+import uuid
 
 # --- KONFIGURASI API ---
 API_URL = os.getenv("API_URL", "")
@@ -11,6 +12,9 @@ API_KEY = os.getenv("API_KEY", "")
 
 CF_CLIENT_ID = os.getenv("CF_CLIENT_ID", "")
 CF_CLIENT_SECRET = os.getenv("CF_CLIENT_SECRET", "")
+
+# Generate Unique Session ID for this VM instance
+SESSION_ID = str(uuid.uuid4())
 
 def get_system_info():
     """Mengambil Profile dan GPU dari environment variables"""
@@ -54,10 +58,12 @@ if not profile_name or profile_name == "Unknown_User":
 print(f"--- Monitoring Aktif ---")
 print(f"Account : {profile_name}")
 print(f"GPU     : {gpu_type}")
+print(f"Session : {SESSION_ID}")
 
 CONFIG = {
     "account_name": profile_name,
-    "gpu_type": gpu_type
+    "gpu_type": gpu_type,
+    "session_id": SESSION_ID
 }
 
 HEADERS = {
