@@ -1,5 +1,7 @@
 import requests
 import time
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import sys
 import subprocess
 import re
@@ -83,7 +85,7 @@ session.headers.update(HEADERS)
 
 while True:
     try:
-        response = session.post(API_URL, json=CONFIG, timeout=15)
+        response = session.post(API_URL, json=CONFIG, timeout=15, verify=False)
         if response.status_code == 200:
             try:
                 res = response.json()
@@ -97,7 +99,7 @@ while True:
         else:
             # Handle non-200 errors (e.g. 502 Bad Gateway from Cloudflare)
             short_msg = "Bad Gateway/Server Error" if response.status_code in [502, 503, 504] else "Error"
-            print(f"\r[{time.strftime('%H:%M:%S')}] Server Response {response.status_code}: {short_msg} \033[K", end="", flush=True)
+            print(f"\r[{time.strftime('%H:%M:%S')}] Server Response {response.status_code}: {short_msg} | Body: {response.text[:100]} \033[K", end="", flush=True)
     except Exception as e:
         print(f"\r[{time.strftime('%H:%M:%S')}] Connection Error: {str(e)} \033[K", end="", flush=True)
     
