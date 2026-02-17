@@ -1,0 +1,27 @@
+comfyui:
+    base_path: /root/volume/ComfyUI/models
+    
+    # Checkpoints standar (SD1.5/SDXL)
+    checkpoints: checkpoints
+    
+    # Text Encoders (T5, Qwen, CLIP)
+    text_encoders: |
+        text_encoders
+        clip
+    
+    # Diffusion Models (Wan2.1, Flux, UNET)
+    diffusion_models: |
+        diffusion_models
+        unet
+    
+    # Komponen lainnya
+    vae: vae
+    loras: loras
+    upscale_models: upscale_models
+    embeddings: embeddings
+    controlnet: controlnet
+    clip_vision: clip_vision
+    configs: configs
+    
+    # Support untuk Audio
+    audio_encoders: audio_encoders

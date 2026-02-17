@@ -6,8 +6,8 @@ import time
 from tqdm import tqdm
 from huggingface_hub import hf_hub_download, login
 
-# Aktifkan HF Transfer (Download super cepat berbasis Rust)
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+# Aktifkan HF Xet High Performance (Pengganti deprecated HF Transfer)
+os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
 
 # ============================================================================
 # DEFINISI DIREKTORI OUTPUT (PRESET)
@@ -28,7 +28,7 @@ PRESET_DIRS = {
 # DOWNLOAD FUNCTION
 # ============================================================================
 def download_url(url, output_dir, token=None):
-    """Download file dari URL dengan hf_transfer"""
+    """Download file dari URL dengan hf-xet (High Performance)"""
     
     # Ekstrak filename dan repo_id dari URL
     try:
@@ -109,7 +109,7 @@ def download_batch(tasks, max_workers=4, token=None):
     print(f"\n{'='*40}")
     print(f"🚀 BATCH DOWNLOAD: {len(tasks)} files")
     print(f"{'='*40}")
-    print(f"⚡ Method: hf_transfer (ultra-fast)")
+    print(f"⚡ Method: hf-xet (High Performance)")
     print(f"🧵 Workers: {max_workers}")
     print(f"{'='*80}\n")
     
@@ -161,7 +161,7 @@ def download_batch(tasks, max_workers=4, token=None):
 # ============================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="🚀 Ultra-fast HuggingFace Model Downloader (hf_transfer + Parallel)"
+        description="🚀 Ultra-fast HuggingFace Model Downloader (hf-xet + Parallel)"
     )
     
     parser.add_argument('--url', action='append')
@@ -178,7 +178,7 @@ def main():
     # =========================================================
     if args.token:
         # Gunakan fungsi login resmi. Ini akan menulis token ke cache
-        # yang dibaca oleh modul hf_transfer (Rust)
+        # yang dibaca oleh modul hf-xet
         try:
             print(f"🔐 Authenticating with Hugging Face Hub...")
             login(token=args.token, add_to_git_credential=False)
