@@ -21,7 +21,14 @@ comfyui:
     embeddings: embeddings
     controlnet: controlnet
     clip_vision: clip_vision
-    configs: configs
+    diffusers: diffusers
+    gligen: gligen
+    hypernetworks: hypernetworks
+    latent_upscale_models: latent_upscale_models
+    model_patches: model_patches
+    photomaker: photomaker
+    style_models: style_models
+    vae_approx: vae_approx
     
     # Support untuk Audio
     audio_encoders: audio_encoders
